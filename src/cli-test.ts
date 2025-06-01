@@ -1,22 +1,21 @@
-import { NewsRssService } from "./services/newsRssService";
-import { Input } from "./types"; // Import Input from types
+import { NewsRssService } from "./services/newsRssService.js";
+import { Input } from "./types/index.js"; // Import Input from types
 
-async function runCliTest(inputConfigs: Input[]) {
+async function runCliTest(input: Input) {
   const newsRssService = new NewsRssService();
 
-  for (const config of inputConfigs) {
-    const { hl, gl, count, keyword } = config;
-    try {
-      console.log(`Fetching news for language: ${hl}, country: ${gl}, count: ${count || 'default'}, keyword: ${keyword || 'none'}`);
-      const results = await newsRssService.getNewsRss([config]); // Pass a single config in an array
-      if (results && results.length > 0) {
-        console.log("News RSS Feed Result:", results[0]);
-      } else {
-        console.log("No results received.");
-      }
-    } catch (error) {
-      console.error(`Error fetching news RSS for gl=${gl}, hl=${hl}, keyword=${keyword}:`, error);
+  const { hl, gl, count, keyword } = input;
+  console.log(`Fetching news for language: ${hl}, country: ${gl}, count: ${count || 'default'}, keyword: ${keyword || 'none'}`);
+  try {
+    console.log(`Fetching news for language: ${hl}, country: ${gl}, count: ${count || 'default'}, keyword: ${keyword || 'none'}`);
+    const result = await newsRssService.getNewsRss(input); // Pass a single config in an array
+    if (result) {
+      console.log("News RSS Feed Result:", result);
+    } else {
+      console.log("No results received.");
     }
+  } catch (error) {
+    console.error(`Error fetching news RSS for hl=${hl}, gl=${gl},  keyword=${keyword}:`, error);
   }
 }
 
@@ -44,10 +43,11 @@ if (isNaN(countArg) || countArg <= 0) {
 
 
 // Create the input configuration object
-const inputConfig: Input[0] = { // Specify the type of the object within the array
+const inputConfig: Input = { // Specify the type of the object within the array
   hl: languageArg,
   gl: countryArg,
-  count: countArg,
+  count: parseInt(countArgStr, 10),
+  keyword: keywordArg
 };
 
 // Add keyword if provided
@@ -56,4 +56,4 @@ if (keywordArg !== undefined) {
 }
 
 // Call the test function with an array containing the input config
-runCliTest([inputConfig]);
+runCliTest(inputConfig);

@@ -3,7 +3,7 @@ import { MCPToolManager, ToolContent } from "../core/toolManager.js";
 import { NewsRssService } from "../services/newsRssService.js";
 import { McpError, ErrorCode, Tool } from "@modelcontextprotocol/sdk/types.js";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { InputSchema, inputSchema } from "../types";
+import { InputSchema } from "../types/index.js";
 
 export class ServerToolManager implements MCPToolManager {
   private newsRssService: NewsRssService;
@@ -20,8 +20,32 @@ export class ServerToolManager implements MCPToolManager {
     this.tools = [
       {
         name: "getGoogleNewsItems",
-        description: "Get Google News title and link array from the Google News RSS feed. filtered by language, country, keyword and maximum count",
-        inputSchema: zodToJsonSchema(InputSchema)
+        description: `
+        Retrieve an array of Google News article titles and links from the Google News RSS feed, filtered by the following parameters:
+
+- **hl**: ISO 639-1 language code (e.g., \`en\` for English)
+- **gl**: ISO 3166-1 alpha-2 country code (e.g., \`US\` for the United States)
+- **keyword**: Search keyword
+- **count**: Maximum number of results to return
+
+**Example:**
+
+\`\`\`plaintext
+Input:
+  hl = 'en'
+  gl = 'US'
+  keyword = 'artificial intelligence'
+  count = 5
+
+Output:
+  [
+    { "title": "Google unveils new AI model", "link": "https://news.google.com/..." },
+    { "title": "AI trends in 2025", "link": "https://news.google.com/..." },
+    ...
+  ]
+\`\`\`
+        `,
+        inputSchema: zodToJsonSchema(InputSchema) as any
       }
     ];
   }
@@ -44,29 +68,35 @@ export class ServerToolManager implements MCPToolManager {
     content: ToolContent[];
     isError?: boolean;
   }> {
-    try {
-      switch (name) {
-        case "readFile":
-          return await this.executeReadFile(params);
-        case "writeFile":
-          return await this.executeWriteFile(params);
-        case "listDirectory":
-          return await this.executeListDirectory(params);
-        case "deleteFile":
-          return await this.executeDeleteFile(params);
-        default:
-          throw new McpError(ErrorCode.InternalError, `Unknown tool: ${name}`);
-      }
-    } catch (error) {
+    console.log("Executing tool:", name, params);
+
+    // params 유효성 검사
+    const parsedInput = InputSchema.safeParse(params);
+    if (!parsedInput.success) {
+      throw new McpError(ErrorCode.InvalidParams, "Invalid input parameters");
+    }
+
+    const newsResult = await this.newsRssService.getNewsRss(parsedInput.data);
+    // 'error' 속성의 존재 여부로 타입을 구분
+    if ('error' in newsResult) {
+      // 실패: ErrorOutputSchema 타입인 경우
+      const toolContents: ToolContent[] = [{
+        type: "text",
+        text: `Error fetching news: ${newsResult.error}`
+      }];
       return {
-        content: [
-          {
-            type: "text",
-            text:
-              error instanceof Error ? error.message : "Unknown error occurred",
-          },
-        ],
-        isError: true,
+        content: toolContents,
+        isError: true
+      };
+    } else {
+      // 성공: SuccessOutputSchema (아이템 배열) 타입인 경우
+      const toolContents: ToolContent[] = newsResult.map(item => ({
+        type: "text",
+        text: `${item.title}: ${item.link}`
+      }));
+      return {
+        content: toolContents,
+        isError: false
       };
     }
   }
@@ -79,118 +109,5 @@ export class ServerToolManager implements MCPToolManager {
     for (const callback of this.toolListChangedCallbacks) {
       callback();
     }
-  }
-
-  private async executeReadFile(params: Record<string, any>): Promise<{
-    content: ToolContent[];
-    isError?: boolean;
-  }> {
-    const { path: filePath } = params;
-    const operation: FileOperation = {
-      type: "read",
-      path: filePath,
-    };
-    const result = await this.fileService.handleOperation(operation);
-
-    if (!result.success || !result.data) {
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Failed to read file: ${filePath}`
-      );
-    }
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: result.data,
-        },
-      ],
-    };
-  }
-
-  private async executeWriteFile(params: Record<string, any>): Promise<{
-    content: ToolContent[];
-    isError?: boolean;
-  }> {
-    const { path: filePath, content } = params;
-    const operation: FileOperation = {
-      type: "write",
-      path: filePath,
-      content,
-    };
-    const result = await this.fileService.handleOperation(operation);
-
-    if (!result.success) {
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Failed to write file: ${filePath}`
-      );
-    }
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Successfully wrote to file: ${filePath}`,
-        },
-      ],
-    };
-  }
-
-  private async executeListDirectory(params: Record<string, any>): Promise<{
-    content: ToolContent[];
-    isError?: boolean;
-  }> {
-    const { path: dirPath } = params;
-    const operation: FileOperation = {
-      type: "list",
-      path: dirPath,
-    };
-    const result = await this.fileService.handleOperation(operation);
-
-    if (!result.success || !result.data) {
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Failed to list directory: ${dirPath}`
-      );
-    }
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(result.data, null, 2),
-        },
-      ],
-    };
-  }
-
-  private async executeDeleteFile(params: Record<string, any>): Promise<{
-    content: ToolContent[];
-    isError?: boolean;
-  }> {
-    const { path: filePath } = params;
-    const operation: FileOperation = {
-      type: "delete",
-      path: filePath,
-    };
-    const result = await this.fileService.handleOperation(operation);
-
-    if (!result.success) {
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Failed to delete file: ${filePath}`
-      );
-    }
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Successfully deleted file: ${filePath}`,
-        },
-      ],
-    };
   }
 }

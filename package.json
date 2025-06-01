@@ -2,9 +2,15 @@
   "name": "mcp-google-news-rss",
   "version": "1.0.0",
   "description": "Get started by customizing your environment (defined in the .idx/dev.nix file) with the tools and IDE extensions you'll need for your project!",
-  "main": "index.js",
+  "main": "dist/server.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "node --loader ts-node/esm src/server.ts",
+    "cli": "node --loader ts-node/esm src/cli-test.ts",
+    "client-test": "node --loader ts-node/esm src/client-test.ts"
   },
   "keywords": [],
   "author": "",

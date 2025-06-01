@@ -1,29 +1,15 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { McpError, ErrorCode, ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { NewsRssService } from './services/newsRssService';
+import { NewsRssService } from './services/newsRssService.js';
 import z from 'zod';
-import { ServerToolManager } from './impl/serverToolManager';
+import { ServerToolManager } from './impl/serverToolManager.js';
 
-const server = new Server(
-  {
-    name: "mcp-google-news-rss", // 서버 이름 설정
-    version: "1.0.0", // 서버 버전 설정
-  },
-  {
-    // 서버의 기능 (리소스, 도구, 프롬프트 등) 활성화 여부 설정
-    capabilities: {
-      resources: {}, // 리소스 기능 활성화
-      tools: {}, // 도구 기능 활성화
-      prompts: {}, // 프롬프트 기능 활성화
-    },
-  }
-);
 
 export class NewsRssMCPServer {
   private server:Server;
-  private service:NewsRssService;
-  private toolManager:ServerToolManager;
+  private service:NewsRssService | undefined;
+  private toolManager:ServerToolManager | undefined;
 
   constructor() {
     this.server = new Server(
@@ -33,9 +19,7 @@ export class NewsRssMCPServer {
       },
       {
         capabilities: {
-          resources: {},
-          tools: {},
-          prompts: {}
+          tools: {}
         }
       }
     );
@@ -49,19 +33,15 @@ export class NewsRssMCPServer {
 
     this.service = new NewsRssService();
 
-    this.toolManager = new ServerToolManager(this.fileService);
+    this.toolManager = new ServerToolManager(this.service);
 
     await Promise.all([
-      this.resourceManager.initialize(),
-      this.toolManager.initialize(),
-      this.promptManager.initialize(),
+      this.toolManager.initialize()
     ]);
 
     this.setupToolHandlers();
-    this.setupResourceHandlers();
-    this.setupPromptHandlers();
 
-    console.log("MCP File Server initialized with config:", this.config);
+    console.log("MCP File Server initialized with config:");
   }
 
   private setupErrorHandling(): void {
@@ -90,14 +70,14 @@ export class NewsRssMCPServer {
 
   private setupToolHandlers(): void {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      return await this.toolManager.listTools();
+      return await (this.toolManager as ServerToolManager).listTools();
     });
 
     this.server.setRequestHandler(
       CallToolRequestSchema,
       async (request, extra) => {
         try {
-          const result = await this.toolManager.executeTool(
+          const result = await (this.toolManager as ServerToolManager).executeTool(
             request.params.name,
             request.params.arguments || {}
           );
@@ -106,10 +86,8 @@ export class NewsRssMCPServer {
             _meta: extra,
           };
         } catch (error: any) {
-          throw new McpError(
-            ErrorCode.InternalError,
-            `Tool execution failed: ${error.message}`
-          );
+          // 툴 실행 시 McpError를 던지기 때문에 그대로 전달.
+          throw error;
         }
       }
     );
@@ -129,11 +107,10 @@ export class NewsRssMCPServer {
 
 }
 
-
-// 서버 실행 함수
-async function runServer() {
-  const transport = new StdioServerTransport(); // Stdio 기반 전송 사용
-  await server.connect(transport);
+async function main() {
+  const newsRssServer = new NewsRssMCPServer();
+  await newsRssServer.initialize(); // 핸들러 설정 및 매니저 초기화
+  await newsRssServer.run(); // 서버 시작
 }
 
-runServer();
+main(); // NewsRssMCPServer 인스턴스 실행
