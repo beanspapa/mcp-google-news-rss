@@ -1,21 +1,20 @@
-
 import { z } from "zod";
 
-export const InputSchema = 
-  z.object({
+export const InputSchema = z.object({
   hl: z.string(),
   gl: z.string(),
-  count: z.number().default(5),
+  count: z.number().optional(),
   keyword: z.string().optional(),
-  });
+});
 
 export type Input = z.infer<typeof InputSchema>;
 
-
-export const SuccessOutputSchema = z.array(z.object({
-  title: z.string(),
-  link: z.string().url(),
-}));
+export const SuccessOutputSchema = z.array(
+  z.object({
+    title: z.string(),
+    link: z.string().url(),
+  })
+);
 
 export const ErrorOutputSchema = z.object({
   error: z.string(),

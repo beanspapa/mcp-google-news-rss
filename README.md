@@ -10,10 +10,10 @@ MCP clients can request context from this server using the `context/request` met
 
 Each context request object in the array should include the following parameters:
 
-*   `hl`: (string) The language code for the news feed (e.g., "en-GB"). This corresponds to the `hl` parameter in the Google News RSS URL.
-*   `gl`: (string) The country code for the news feed (e.g., "GB"). This corresponds to the `gl` parameter in the Google News RSS URL.
-*   `count`: (number) The maximum number of news articles to fetch.
-*   `keyword`: (string, optional) A keyword to search for within the news feed. If provided, the server will construct a search URL for Google News RSS.
+- `hl`: (string) The language code for the news feed (e.g., "en-GB"). This corresponds to the `hl` parameter in the Google News RSS URL.
+- `gl`: (string) The country code for the news feed (e.g., "GB"). This corresponds to the `gl` parameter in the Google News RSS URL.
+- `count`: (number) The maximum number of news articles to fetch.
+- `keyword`: (string, optional) A keyword to search for within the news feed. If provided, the server will construct a search URL for Google News RSS.
 
 ### How it Works
 
@@ -21,8 +21,8 @@ The server receives the context request, which is an array of request objects. F
 
 1.  It extracts the `hl`, `gl`, `count`, and optional `keyword` parameters.
 2.  It constructs the appropriate Google News RSS URL.
-    *   If a `keyword` is provided, the URL format is `https://news.google.com/rss?search?q=<keyword>&hl=<hl>&gl=<gl>&ceid=<gl>:<hl>`.
-    *   If no `keyword` is provided, the URL is typically `https://news.google.com/rss?hl=<hl>&gl=<gl>&ceid=<gl>:<hl>` (or a similar default structure depending on Google's RSS implementation for non-search feeds).
+    - If a `keyword` is provided, the URL format is `https://news.google.com/rss?search?q=<keyword>&hl=<hl>&gl=<gl>&ceid=<gl>:<hl>`.
+    - If no `keyword` is provided, the URL is typically `https://news.google.com/rss?hl=<hl>&gl=<gl>&ceid=<gl>:<hl>` (or a similar default structure depending on Google's RSS implementation for non-search feeds).
 3.  It fetches the RSS feed from the constructed URL.
 4.  It parses the RSS feed to extract the specified `count` of news articles, each with a `title` and `link`.
 5.  It formats the results into an object including the request parameters and the fetched `articles`.
