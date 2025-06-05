@@ -137,7 +137,7 @@ export class GoogleNewsRedirectExtractor {
 
       this.browser = await chromium.launch(launchOptions);
       this.browser.on("disconnected", () => {
-        this._logVerbose("👻 Playwright 브라우저 연결 끊김");
+        this._logVerbose("👻 Playwright 브라우저 연결 끊김, 리소스 정리");
         this.browser = null;
         this.context = null;
       });

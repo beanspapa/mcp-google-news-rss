@@ -1,3 +1,8 @@
+// 개발 환경에서 mcps-logger 활성화
+if (process.env.NODE_ENV !== "production") {
+  await import("mcps-logger/console");
+}
+
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { McpError, ErrorCode, ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -41,7 +46,7 @@ export class NewsRssMCPServer {
 
     this.setupToolHandlers();
 
-    console.log("MCP File Server initialized with config:");
+    // console.log("MCP File Server initialized with config:"); // MCP JSON-RPC 호환성을 위해 주석 처리
   }
 
   private setupErrorHandling(): void {
@@ -50,7 +55,16 @@ export class NewsRssMCPServer {
     };
 
     process.on("SIGINT", async () => {
-      await this.server.close();
+      console.log("서버 종료 신호 수신, 리소스 정리 중...");
+      try {
+        if (this.toolManager) {
+          await this.toolManager.cleanup();
+        }
+        await this.server.close();
+        console.log("서버 정상 종료 완료");
+      } catch (error) {
+        console.error("서버 종료 중 오류:", error);
+      }
       process.exit(0);
     });
   }
@@ -98,7 +112,7 @@ export class NewsRssMCPServer {
     try {
       const transport = new StdioServerTransport();
       await this.server.connect(transport);
-      console.log("MCP google news rss Server started");
+      // console.log("MCP google news rss Server started"); // MCP JSON-RPC 호환성을 위해 주석 처리
     } catch (error) {
       console.error("Failed to start MCP google news rss Server:", error);
       throw error;

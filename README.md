@@ -1,78 +1,153 @@
 # Google News RSS Server
 
-This project implements a simple server that fetches news articles from the Google News RSS feed based on provided parameters. It is designed to be used with the MCP context request mechanism.
+This project implements a Google News RSS server with two main tools for fetching and extracting news articles. It is designed to be used with the MCP (Model Context Protocol) framework.
 
-## MCP Context Request
+## Available Tools
 
-MCP clients can request context from this server using the `context/request` method. The request should contain an array of context request objects. Each object specifies the parameters for fetching news from Google News.
+### 1. getGoogleNewsItems (Fast)
 
-### Request Parameters
+Retrieves basic news information from Google News RSS feed - titles, links, and publication dates.
 
-Each context request object in the array should include the following parameters:
+**Parameters:**
+- `hl`: (string, required) ISO 639-1 language code (e.g., "en", "ko")
+- `gl`: (string, required) ISO 3166-1 alpha-2 country code (e.g., "US", "KR") 
+- `keyword`: (string, optional) Search keyword
+- `count`: (number, optional) Maximum number of results (default: 10)
 
-- `hl`: (string) The language code for the news feed (e.g., "en-GB"). This corresponds to the `hl` parameter in the Google News RSS URL.
-- `gl`: (string) The country code for the news feed (e.g., "GB"). This corresponds to the `gl` parameter in the Google News RSS URL.
-- `count`: (number) The maximum number of news articles to fetch.
-- `keyword`: (string, optional) A keyword to search for within the news feed. If provided, the server will construct a search URL for Google News RSS.
+**Example Request:**
+```json
+{
+  "hl": "en",
+  "gl": "US", 
+  "keyword": "artificial intelligence",
+  "count": 5
+}
+```
 
-### How it Works
-
-The server receives the context request, which is an array of request objects. For each request object:
-
-1.  It extracts the `hl`, `gl`, `count`, and optional `keyword` parameters.
-2.  It constructs the appropriate Google News RSS URL.
-    - If a `keyword` is provided, the URL format is `https://news.google.com/rss?search?q=<keyword>&hl=<hl>&gl=<gl>&ceid=<gl>:<hl>`.
-    - If no `keyword` is provided, the URL is typically `https://news.google.com/rss?hl=<hl>&gl=<gl>&ceid=<gl>:<hl>` (or a similar default structure depending on Google's RSS implementation for non-search feeds).
-3.  It fetches the RSS feed from the constructed URL.
-4.  It parses the RSS feed to extract the specified `count` of news articles, each with a `title` and `link`.
-5.  It formats the results into an object including the request parameters and the fetched `articles`.
-
-The server returns an array of these result objects, corresponding to the array of request objects in the input.
-
-### Example Request
-
-Here is an example of an MCP context request targeting this server with a keyword:
-
+**Example Response:**
 ```json
 [
   {
-    "hl": "en-GB",
-    "gl": "GB",
-    "count": 5,
-    "keyword": "test"
+    "title": "Google unveils new AI model",
+    "link": "https://news.google.com/articles/...",
+    "pubDate": "2025-01-08T10:30:00Z"
+  },
+  {
+    "title": "AI trends in 2025", 
+    "link": "https://news.google.com/articles/...",
+    "pubDate": "2025-01-08T09:15:00Z"
   }
 ]
 ```
 
-This request asks for up to 5 news articles from the United Kingdom in English, searching for the keyword "test". The corresponding Google News RSS URL constructed by the server would be similar to `https://news.google.com/rss?search?q=test&hl=en-GB&gl=GB&ceid=GB:en`.
+### 2. searchAndExtractNews (Comprehensive)
 
-### Example Response
+Searches Google News and extracts full article content including text, author, and metadata using web scraping.
 
-The server will return a response that is an array of result objects. For the example request above, a possible response could be:
+**Parameters:**
+- `hl`: (string, required) ISO 639-1 language code (e.g., "en", "ko")
+- `gl`: (string, required) ISO 3166-1 alpha-2 country code (e.g., "US", "KR")
+- `keyword`: (string, optional) Search keyword
+- `count`: (number, optional) Maximum number of articles to extract (default: 5)
 
+**Example Request:**
+```json
+{
+  "hl": "ko",
+  "gl": "KR",
+  "keyword": "인공지능",
+  "count": 3
+}
+```
+
+**Example Response:**
 ```json
 [
   {
-    "hl": "en-GB",
-    "gl": "GB",
-    "count": 5,
-    "keyword": "test",
-    "articles": [
-      {
-        "title": "News Title 1 Related to Test",
-        "link": "https://news.google.com/articles/..."
-      },
-      {
-        "title": "Another News Article About Testing",
-        "link": "https://news.google.com/articles/..."
-      },
-      {
-        "title": "Third Test-Related News",
-        "link": "https://news.google.com/articles/..."
-      }
-    ]
+    "title": "AI 기술의 새로운 발전",
+    "link": "https://news.google.com/articles/...",
+    "content": "인공지능 기술이 새로운 단계로 발전하면서...",
+    "author": "홍길동",
+    "publishDate": "2025-01-08T10:30:00Z",
+    "description": "AI 기술 발전에 대한 최신 소식"
   }
 ]
 ```
 
-Each object in the `articles` array contains the `title` and `link` of a news article. Note that the number of returned articles may be less than the requested `count` if fewer articles are available in the feed.
+## Performance Comparison
+
+| Tool | Speed | Data | Use Case |
+|------|--------|------|----------|
+| `getGoogleNewsItems` | ⚡ Fast | Title, Link, Date | Quick news overview |
+| `searchAndExtractNews` | 🐌 Slow | Full content + metadata | Detailed analysis |
+
+## Installation & Setup
+
+### Prerequisites
+- Node.js 18+ 
+- npm or yarn
+
+### Installation
+```bash
+git clone <repository-url>
+cd mcp-google-news-rss
+npm install
+npm run build
+```
+
+### Usage with MCP Clients
+
+This server implements the MCP (Model Context Protocol) and can be used with MCP-compatible clients like Claude Desktop.
+
+Add to your MCP client configuration:
+```json
+{
+  "servers": {
+    "google-news-rss": {
+      "command": "node",
+      "args": ["dist/server.js"]
+    }
+  }
+}
+```
+
+## Development
+
+### Logging with mcps-logger
+
+This project uses `mcps-logger` to safely handle console output during development without interfering with the MCP JSON-RPC protocol.
+
+**Important**: MCP servers communicate via JSON-RPC over stdio. Any `console.log` output to stdout will corrupt the protocol and cause parsing errors in MCP clients.
+
+#### Setup for Development
+
+1. **Install dependencies** (already included):
+   ```bash
+   npm install
+   ```
+
+2. **Start the logger terminal** (in a separate terminal window):
+   ```bash
+   npx mcps-logger
+   ```
+
+3. **Run your MCP server** (in your main terminal):
+   ```bash
+   npm run build && npm run dev
+   ```
+
+#### How it Works
+
+- The `mcps-logger/console` import redirects all console output to a separate terminal
+- This keeps the MCP protocol communication clean on stdout  
+- You can safely use `console.log`, `console.warn`, `console.error` in your code
+- All log output will appear in the mcps-logger terminal instead of the main process
+
+#### Without mcps-logger
+
+If you don't use mcps-logger, you should:
+- Avoid using `console.log` in production code
+- Use `console.error` only for critical errors (stderr)
+- Or remove all console statements entirely
+
+This logging setup ensures your MCP server works correctly with MCP clients like Claude Desktop and MCP Inspector.

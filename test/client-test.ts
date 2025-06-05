@@ -82,6 +82,37 @@ async function testMCPServer() {
       })
     );
     console.log("news list:", newsResult);
+
+    // 4. searchAndExtractNews 도구 테스트
+    console.log("\n=== Testing searchAndExtractNews Tool ===");
+    const extractedNewsResult = await client.request(
+      {
+        method: "tools/call",
+        params: {
+          name: "searchAndExtractNews",
+          arguments: {
+            hl: "ko",
+            gl: "KR",
+            count: 2,
+            keyword: "AI",
+
+          },
+        },
+      },
+      z.object({
+        content: z.array(
+          z.object({
+            type: z.string(),
+            text: z.string(),
+          })
+        ),
+      })
+    );
+    console.log("extracted news:", extractedNewsResult);
+
+    // 연결 닫기
+    await client.close();
+    console.log("\nMCP client disconnected");
     } catch (error) {
         console.error("Error in testMCPServer:", error);
         throw error;
@@ -89,4 +120,12 @@ async function testMCPServer() {
 }
 
 // 테스트 실행
-testMCPServer().catch(console.error);
+testMCPServer()
+  .then(() => {
+    console.log("Test completed successfully");
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error("Test failed:", error);
+    process.exit(1);
+  });

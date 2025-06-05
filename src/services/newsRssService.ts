@@ -192,7 +192,7 @@ export class NewsRssService {
     hl: string;
     keyword?: string;
     count?: number;
-  }): Promise<{ title: string; link: string }[]> {
+  }): Promise<{ title: string; link: string; pubDate?: string }[]> {
     let url = `${this.googleRssBaseUrl}?hl=${hl}&gl=${gl}&ceid=${gl}:${hl}`;
 
     if (keyword) {
@@ -201,7 +201,7 @@ export class NewsRssService {
       )}&hl=${hl}&gl=${gl}&ceid=${gl}:${hl}`;
     }
 
-    console.log(`Fetching RSS from: ${url}`);
+    // console.log(`Fetching RSS from: ${url}`); // MCP JSON-RPC 호환성을 위해 주석 처리
 
     const xml = await axios.get(url).then((res) => res.data);
 
@@ -218,7 +218,7 @@ export class NewsRssService {
 
     // If channel.item is missing or empty, return an empty array
     if (!data.rss.channel.item) {
-      console.log("No items found in RSS feed.");
+      // console.log("No items found in RSS feed."); // MCP JSON-RPC 호환성을 위해 주석 처리
       return [];
     }
 
@@ -247,11 +247,13 @@ export class NewsRssService {
         return {
           title: item.title,
           link: item.link,
+          pubDate: item.pubDate || undefined,
         };
       })
       .filter((item: any) => item !== null) as {
       title: string;
       link: string;
+      pubDate?: string;
     }[]; // Filter out nulls and cast
   }
 }

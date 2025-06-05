@@ -74,7 +74,7 @@ export class UnifiedNewsExtractor {
           fallbackReason = `${name} 추출기 콘텐츠 없음`;
           article = await this.generalExtractor.extract(url, options);
         } else if (!article || !article.content) {
-          console.error(
+          console.log(
             `🚫 모든 추출기가 콘텐츠를 추출하지 못했습니다: ${url}`
           );
           return null;
@@ -102,7 +102,7 @@ export class UnifiedNewsExtractor {
       return unifiedArticle;
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
-      console.error(`💥 통합 추출기 심각한 오류: ${err.message}`);
+      console.log(`💥 통합 추출기 심각한 오류: ${err.message}`);
       return null;
     }
   }
@@ -111,7 +111,7 @@ export class UnifiedNewsExtractor {
     urls: string[],
     options?: any
   ): Promise<{ results: (UnifiedExtractedArticle | null)[]; errors: any[] }> {
-    console.log(`🚀 통합 추출기 배치 작업 시작: ${urls.length}개 URL`);
+    // console.log(`🚀 통합 추출기 배치 작업 시작: ${urls.length}개 URL`); // MCP JSON-RPC 호환성을 위해 주석 처리
     const results: (UnifiedExtractedArticle | null)[] = [];
     const errors: { url: string; error: string }[] = [];
 
@@ -128,7 +128,7 @@ export class UnifiedNewsExtractor {
         }
       } catch (error: unknown) {
         const err = error instanceof Error ? error : new Error(String(error));
-        console.error(`💥 배치 작업 중 오류 (${url}): ${err.message}`);
+        console.log(`💥 배치 작업 중 오류 (${url}): ${err.message}`);
         errors.push({ url, error: err.message });
       }
     }
@@ -185,9 +185,9 @@ export class UnifiedNewsExtractor {
       console.log("✅ 모든 추출기 리소스 정리 완료");
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
-      console.error(`💥 추출기 리소스 정리 중 오류: ${err.message}`);
+              console.log(`💥 추출기 리소스 정리 중 오류: ${err.message}`);
     }
   }
 }
 
-module.exports = { UnifiedNewsExtractor };
+

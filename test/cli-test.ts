@@ -1,5 +1,5 @@
-import { NewsRssService } from "./services/newsRssService.js";
-import { Input } from "./types/index.js"; // Import Input from types
+import { NewsRssService } from "../src/services/newsRssService.js";
+import { Input } from "../src/types/index.js"; // Import Input from types
 
 async function runCliTest(input: Input) {
   const newsRssService = new NewsRssService();
