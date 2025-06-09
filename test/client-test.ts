@@ -14,7 +14,7 @@ async function testMCPServer() {
     const serverConfig = {
       // 사용자가 제공한 예시와 유사하게 구성
       command: "node", // 실행할 명령어
-      script: "dist/server.js" // 실행할 스크립트
+      script: "dist/server.js", // 실행할 스크립트
     };
 
     // ----------------------------------------------------------
@@ -22,7 +22,7 @@ async function testMCPServer() {
     // Stdio 전송 계층 생성 및 연결 (수정됨)
     const transport = new StdioClientTransport({
       command: serverConfig.command, // "node"
-      args: [serverConfig.script] // 구성된 인수 배열 사용
+      args: [serverConfig.script], // 구성된 인수 배열 사용
     });
     await client.connect(transport);
     console.log("Connected to MCP server");
@@ -65,10 +65,9 @@ async function testMCPServer() {
         params: {
           name: "getGoogleNewsItems",
           arguments: {
-            hl: "ko",
-            gl: "KR",
-            count: 3,
-            keyword: "인공지능",
+            hl: "es",
+            gl: "AR",
+            count: 10,
           },
         },
       },
@@ -91,11 +90,9 @@ async function testMCPServer() {
         params: {
           name: "searchAndExtractNews",
           arguments: {
-            hl: "ko",
-            gl: "KR",
-            count: 2,
-            keyword: "AI",
-
+            hl: "es",
+            gl: "AR",
+            count: 10,
           },
         },
       },
@@ -113,10 +110,10 @@ async function testMCPServer() {
     // 연결 닫기
     await client.close();
     console.log("\nMCP client disconnected");
-    } catch (error) {
-        console.error("Error in testMCPServer:", error);
-        throw error;
-    }
+  } catch (error) {
+    console.error("Error in testMCPServer:", error);
+    throw error;
+  }
 }
 
 // 테스트 실행

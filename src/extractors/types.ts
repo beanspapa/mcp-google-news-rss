@@ -59,8 +59,15 @@ export interface UnifiedExtractedArticle extends ExtractedArticleBase {
     totalExtractionTime: number;
     url: string;
     timestamp: string;
-    metadata?: any; // Consider making this more specific, e.g., Partial<ArticleMetadataBase>
+    metadata?: any;
     fallbackReason?: string;
+    sources?: {
+      originalUrl: string;
+      actualSourceUrl: string;
+      sourceDomain: string;
+      isGoogleNewsRedirect: boolean;
+      googleNewsUrl?: string;
+    };
   };
 }
 

@@ -64,6 +64,7 @@ async function testUnifiedExtractor(): Promise<void> {
       }
 
       console.log(`✅ 성공!`);
+      console.log(`🔗 원문 URL: ${result.sourceUrl || "정보 없음"}`);
       console.log(
         `🎯 감지된 사이트: ${result.unified?.detectedSite || "정보 없음"}`
       );
@@ -144,6 +145,7 @@ async function testSingleUrl(
 
     console.log("✅ 추출 성공!");
     console.log("\n🎯 통합 정보:");
+    console.log(`🔗 원문 URL: ${result.sourceUrl || "정보 없음"}`);
     console.log(
       `  🔍 감지된 사이트: ${result.unified?.detectedSite || "정보 없음"}`
     );

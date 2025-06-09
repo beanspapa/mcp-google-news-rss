@@ -74,9 +74,7 @@ export class UnifiedNewsExtractor {
           fallbackReason = `${name} 추출기 콘텐츠 없음`;
           article = await this.generalExtractor.extract(url, options);
         } else if (!article || !article.content) {
-          console.log(
-            `🚫 모든 추출기가 콘텐츠를 추출하지 못했습니다: ${url}`
-          );
+          console.log(`🚫 모든 추출기가 콘텐츠를 추출하지 못했습니다: ${url}`);
           return null;
         }
       }
@@ -86,6 +84,7 @@ export class UnifiedNewsExtractor {
 
       const unifiedArticle: UnifiedExtractedArticle = {
         ...(article as ExtractedArticleBase),
+        sourceUrl: this.getActualSourceUrl(article, url),
         unified: {
           detectedSite: this.detectSite(url),
           extractorUsed:
@@ -169,6 +168,26 @@ export class UnifiedNewsExtractor {
     return "Unknown";
   }
 
+  private getActualSourceUrl(
+    article:
+      | ExtractedArticleBase
+      | ExtractedGoogleArticle
+      | ExtractedNaverArticle
+      | ExtractedGeneralArticle
+      | null,
+    originalUrl: string
+  ): string {
+    if (!article) {
+      return originalUrl;
+    }
+    // 구글 뉴스 추출기의 경우 실제 언론사 URL 반환
+    if ("originalGoogleUrl" in article && article.sourceUrl) {
+      return article.sourceUrl;
+    }
+    // 기본적으로 article의 sourceUrl 또는 원본 URL 반환
+    return article.sourceUrl || originalUrl;
+  }
+
   public async closeAll(): Promise<void> {
     console.log("🚪 모든 추출기 리소스 정리 중...");
     const closePromises: Promise<void>[] = [];
@@ -185,9 +204,7 @@ export class UnifiedNewsExtractor {
       console.log("✅ 모든 추출기 리소스 정리 완료");
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
-              console.log(`💥 추출기 리소스 정리 중 오류: ${err.message}`);
+      console.log(`💥 추출기 리소스 정리 중 오류: ${err.message}`);
     }
   }
 }
-
-
