@@ -57,17 +57,17 @@ async function testMCPServer() {
     );
     console.log("Available Tools:", toolsResponse);
 
-    // 3. 도구 실행 테스트
-    console.log("\n=== Testing Tool Execution ===");
+    // 3. getGoogleNewsItems 도구 실행 테스트
+    console.log("\n=== Testing getGoogleNewsItems Tool ===");
     const newsResult = await client.request(
       {
         method: "tools/call",
         params: {
           name: "getGoogleNewsItems",
           arguments: {
-            hl: "es",
-            gl: "AR",
-            count: 10,
+            hl: "ko",
+            gl: "KR",
+            count: 10, // 테스트를 위해 10개로 늘립니다.
           },
         },
       },
@@ -80,9 +80,43 @@ async function testMCPServer() {
         ),
       })
     );
-    console.log("news list:", newsResult);
+    console.log("News List:", newsResult.content[0].text);
 
-    // 4. searchAndExtractNews 도구 테스트
+    // 4. extractNewsContents 도구 테스트 (getGoogleNewsItems 결과 사용)
+    console.log("\n=== Testing extractNewsContents Tool ===");
+    const articlesToExtract = JSON.parse(newsResult.content[0].text);
+
+    if (Array.isArray(articlesToExtract) && articlesToExtract.length > 0) {
+      const extractedContentsResult = await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "extractNewsContents",
+            arguments: {
+              articles: articlesToExtract,
+            },
+          },
+        },
+        z.object({
+          content: z.array(
+            z.object({
+              type: z.string(),
+              text: z.string(),
+            })
+          ),
+        })
+      );
+      console.log(
+        "Extracted Contents:",
+        extractedContentsResult.content[0].text
+      );
+    } else {
+      console.log(
+        "No articles found from getGoogleNewsItems to test extractNewsContents."
+      );
+    }
+
+    // 5. searchAndExtractNews 도구 테스트
     console.log("\n=== Testing searchAndExtractNews Tool ===");
     const extractedNewsResult = await client.request(
       {
@@ -90,9 +124,10 @@ async function testMCPServer() {
         params: {
           name: "searchAndExtractNews",
           arguments: {
-            hl: "es",
-            gl: "AR",
-            count: 10,
+            hl: "ko",
+            gl: "KR",
+            keyword: "자율주행",
+            count: 5, // 테스트를 위해 5개로 늘립니다.
           },
         },
       },
@@ -105,7 +140,10 @@ async function testMCPServer() {
         ),
       })
     );
-    console.log("extracted news:", extractedNewsResult);
+    console.log(
+      "Search and Extracted News:",
+      extractedNewsResult.content[0].text
+    );
 
     // 연결 닫기
     await client.close();

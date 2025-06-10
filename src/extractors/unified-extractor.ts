@@ -110,32 +110,68 @@ export class UnifiedNewsExtractor {
     urls: string[],
     options?: any
   ): Promise<{ results: (UnifiedExtractedArticle | null)[]; errors: any[] }> {
-    // console.log(`🚀 통합 추출기 배치 작업 시작: ${urls.length}개 URL`); // MCP JSON-RPC 호환성을 위해 주석 처리
-    const results: (UnifiedExtractedArticle | null)[] = [];
-    const errors: { url: string; error: string }[] = [];
+    const BATCH_SIZE = 5; // 한 번에 처리할 동시 요청 수
+    const allResults: (UnifiedExtractedArticle | null)[] = [];
+    const allErrors: { url: string; error: string }[] = [];
 
-    for (const url of urls) {
-      try {
-        const result = await this.extract(url, options);
-        if (result) {
-          results.push(result);
+    console.log(
+      `🚀 통합 추출기 배치 작업 시작: ${urls.length}개 URL, 동시성: ${BATCH_SIZE}`
+    );
+
+    for (let i = 0; i < urls.length; i += BATCH_SIZE) {
+      const chunk = urls.slice(i, i + BATCH_SIZE);
+      console.log(
+        `- 처리 중인 배치: ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(
+          urls.length / BATCH_SIZE
+        )}, 크기: ${chunk.length}`
+      );
+
+      const promises = chunk.map((url) =>
+        this.extract(url, options).catch((error) => ({
+          error: error instanceof Error ? error : new Error(String(error)),
+          url,
+        }))
+      );
+
+      const settledResults = await Promise.allSettled(promises);
+
+      settledResults.forEach((result, index) => {
+        const originalUrl = chunk[index];
+        if (result.status === "fulfilled") {
+          const value = result.value;
+          // `sourceUrl` 속성이 있으면 성공적인 추출로 간주
+          if (value && "sourceUrl" in value) {
+            allResults.push(value as UnifiedExtractedArticle);
+          } else if (value && "error" in value) {
+            const errPayload = value as { url: string; error: Error };
+            allErrors.push({
+              url: errPayload.url,
+              error: errPayload.error.message,
+            });
+          } else {
+            // null을 반환한 경우
+            allErrors.push({
+              url: originalUrl,
+              error: "Extraction returned null",
+            });
+          }
         } else {
-          errors.push({
-            url,
-            error: "Extraction returned null or empty content",
+          // Promise 자체가 실패한 경우 (내부 catch에서 잡지 못한 오류)
+          allErrors.push({
+            url: originalUrl,
+            error:
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason),
           });
         }
-      } catch (error: unknown) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        console.log(`💥 배치 작업 중 오류 (${url}): ${err.message}`);
-        errors.push({ url, error: err.message });
-      }
+      });
     }
 
     console.log(
-      `🏁 통합 추출기 배치 작업 완료: 성공 ${results.length}, 실패 ${errors.length}`
+      `🏁 통합 추출기 배치 작업 완료: 성공 ${allResults.length}, 실패 ${allErrors.length}`
     );
-    return { results, errors };
+    return { results: allResults, errors: allErrors };
   }
 
   private getExtractorForUrl(url: string): ExtractorMappingValue {

@@ -7,15 +7,20 @@ import {
   SuccessOutputSchema,
   ExtractedNewsOutputSchema,
 } from "../types/index.js";
-import { extract } from "../extractors/index.js";
+import { UnifiedNewsExtractor } from "../extractors/unified-extractor.js";
 
 export class ServerToolManager implements MCPToolManager {
   private newsRssService: NewsRssService;
+  private unifiedExtractor: UnifiedNewsExtractor;
   private toolListChangedCallbacks: (() => void)[] = [];
   private tools: Tool[] = [];
 
   constructor(newsRssService: NewsRssService) {
     this.newsRssService = newsRssService;
+    this.unifiedExtractor = new UnifiedNewsExtractor({
+      timeout: 30000,
+      maxRetries: 2,
+    });
   }
 
   async initialize(): Promise<void> {
@@ -111,18 +116,80 @@ Output:
           required: ["hl", "gl"],
         } as any,
       },
+      {
+        name: "extractNewsContents",
+        description: `
+  주어진 뉴스 기사 링크 목록에서 각 기사의 전체 내용과 관련 정보를 추출합니다.
+
+- **articles**: 추출할 기사 정보 배열. 각 객체는 다음을 포함해야 합니다:
+  - **title**: 기사 제목 (문자열)
+  - **link**: 기사 원문 링크 (문자열, 필수)
+  - **pubDate**: 기사 발행일 (문자열)
+
+**Example:**
+
+\`\`\`plaintext
+Input:
+  articles: [
+    { "title": "AI의 미래", "link": "https://some-news.com/ai-future", "pubDate": "2023-10-27" },
+    { "title": "새로운 기술 동향", "link": "https://another-news.com/tech-trends", "pubDate": "2023-10-26" }
+  ]
+
+Output:
+  [
+    {
+      "title": "AI의 미래",
+      "link": "https://some-news.com/ai-future",
+      "sourceUrl": "https://some-news.com/ai-future",
+      "content": "인공지능은 우리 삶의 많은 부분을 바꾸고 있습니다...",
+      "author": "김기자",
+      "publishDate": "2023-10-27",
+      "description": "AI가 미래에 미칠 영향에 대한 심층 분석",
+      "extractionSuccess": true
+    },
+    ...
+  ]
+\`\`\`
+        `,
+        inputSchema: {
+          type: "object",
+          properties: {
+            articles: {
+              type: "array",
+              description: "추출할 기사 정보 배열",
+              items: {
+                type: "object",
+                properties: {
+                  title: {
+                    type: "string",
+                    description: "기사 제목",
+                  },
+                  link: {
+                    type: "string",
+                    description: "기사 원문 링크",
+                  },
+                  pubDate: {
+                    type: "string",
+                    description: "기사 발행일",
+                  },
+                },
+                required: ["link"],
+              },
+            },
+          },
+          required: ["articles"],
+        } as any,
+      },
     ];
   }
 
   async cleanup(): Promise<void> {
     // 추출기 리소스 정리
     try {
-      const { UnifiedNewsExtractor } = await import(
-        "../extractors/unified-extractor.js"
-      );
-      const extractor = new UnifiedNewsExtractor();
-      await extractor.closeAll();
-      console.log("서버 종료 시 추출기 리소스 정리 완료");
+      if (this.unifiedExtractor) {
+        await this.unifiedExtractor.closeAll();
+        console.log("서버 종료 시 추출기 리소스 정리 완료");
+      }
     } catch (error) {
       console.log("서버 종료 시 추출기 리소스 정리 중 오류:", error);
     }
@@ -229,110 +296,82 @@ Output:
         // 2단계: 각 뉴스 기사의 내용 추출
         const extractedNews: any[] = [];
 
-        // 추출기 인스턴스 관리
-        let unifiedExtractor: any = null;
-
-        try {
-          // 동적 import로 추출기 생성
-          const { UnifiedNewsExtractor } = await import(
-            "../extractors/unified-extractor.js"
-          );
-          unifiedExtractor = new UnifiedNewsExtractor({
-            timeout: 30000, // 30초 타임아웃
-            maxRetries: 2,
+        // Promise.allSettled를 사용해 병렬 처리 및 실패 허용
+        const extractionPromises = newsResult.map(async (newsItem, index) => {
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error("Extraction timeout")), 45000); // 45초 전체 타임아웃
           });
 
-          // Promise.allSettled를 사용해 병렬 처리 및 실패 허용
-          const extractionPromises = newsResult.map(async (newsItem, index) => {
-            const timeoutPromise = new Promise((_, reject) => {
-              setTimeout(() => reject(new Error("Extraction timeout")), 45000); // 45초 전체 타임아웃
-            });
+          const extractionPromise = (async () => {
+            try {
+              console.log(`Extracting content from: ${newsItem.link}`);
+              const extractedArticle = await this.unifiedExtractor.extract(
+                newsItem.link
+              );
 
-            const extractionPromise = (async () => {
-              try {
-                console.log(`Extracting content from: ${newsItem.link}`);
-                const extractedArticle = await unifiedExtractor.extract(
-                  newsItem.link
-                );
-
-                if (extractedArticle && extractedArticle.content) {
-                  return {
-                    title: extractedArticle.title || newsItem.title,
-                    link: newsItem.link,
-                    sourceUrl: extractedArticle.sourceUrl,
-                    content: extractedArticle.content,
-                    author: extractedArticle.author,
-                    publishDate:
-                      extractedArticle.publishDate || newsItem.pubDate,
-                    description: extractedArticle.description,
-                    extractionSuccess: true,
-                  };
-                } else {
-                  return {
-                    title: newsItem.title,
-                    link: newsItem.link,
-                    sourceUrl: newsItem.link,
-                    content: "내용 추출에 실패했습니다.",
-                    publishDate: newsItem.pubDate,
-                    extractionSuccess: false,
-                  };
-                }
-              } catch (error) {
-                console.log(
-                  `Error extracting content from ${newsItem.link}:`,
-                  error
-                );
+              if (extractedArticle && extractedArticle.content) {
+                return {
+                  title: extractedArticle.title || newsItem.title,
+                  link: newsItem.link,
+                  sourceUrl: extractedArticle.sourceUrl,
+                  content: extractedArticle.content,
+                  author: extractedArticle.author,
+                  publishDate: extractedArticle.publishDate || newsItem.pubDate,
+                  description: extractedArticle.description,
+                  extractionSuccess: true,
+                };
+              } else {
                 return {
                   title: newsItem.title,
                   link: newsItem.link,
                   sourceUrl: newsItem.link,
-                  content: `추출 오류: ${
-                    error instanceof Error ? error.message : String(error)
-                  }`,
+                  content: "내용 추출에 실패했습니다.",
                   publishDate: newsItem.pubDate,
                   extractionSuccess: false,
                 };
               }
-            })();
-
-            return Promise.race([extractionPromise, timeoutPromise]);
-          });
-
-          // 모든 추출 작업을 병렬로 실행하되 실패해도 계속 진행
-          const results = await Promise.allSettled(extractionPromises);
-
-          results.forEach((result, index) => {
-            if (result.status === "fulfilled") {
-              extractedNews.push(result.value);
-            } else {
-              // Promise가 reject된 경우에도 기본 정보 유지
-              const newsItem = newsResult[index];
-              extractedNews.push({
+            } catch (error) {
+              console.log(
+                `Error extracting content from ${newsItem.link}:`,
+                error
+              );
+              return {
                 title: newsItem.title,
                 link: newsItem.link,
                 sourceUrl: newsItem.link,
-                content: `추출 실패: ${
-                  result.reason?.message || "Unknown error"
+                content: `추출 오류: ${
+                  error instanceof Error ? error.message : String(error)
                 }`,
                 publishDate: newsItem.pubDate,
                 extractionSuccess: false,
-              });
+              };
             }
-          });
-        } finally {
-          // 리소스 정리 보장
-          if (
-            unifiedExtractor &&
-            typeof unifiedExtractor.closeAll === "function"
-          ) {
-            try {
-              await unifiedExtractor.closeAll();
-              console.log("추출기 리소스 정리 완료");
-            } catch (cleanupError) {
-              console.log("추출기 리소스 정리 중 오류:", cleanupError);
-            }
+          })();
+
+          return Promise.race([extractionPromise, timeoutPromise]);
+        });
+
+        // 모든 추출 작업을 병렬로 실행하되 실패해도 계속 진행
+        const results = await Promise.allSettled(extractionPromises);
+
+        results.forEach((result, index) => {
+          if (result.status === "fulfilled") {
+            extractedNews.push(result.value);
+          } else {
+            // Promise가 reject된 경우에도 기본 정보 유지
+            const newsItem = newsResult[index];
+            extractedNews.push({
+              title: newsItem.title,
+              link: newsItem.link,
+              sourceUrl: newsItem.link,
+              content: `추출 실패: ${
+                result.reason?.message || "Unknown error"
+              }`,
+              publishDate: newsItem.pubDate,
+              extractionSuccess: false,
+            });
           }
-        }
+        });
 
         const toolContents: ToolContent[] = [
           {
@@ -360,6 +399,117 @@ Output:
           isError: true,
         };
       }
+    }
+
+    if (name === "extractNewsContents") {
+      // params 유효성 검사
+      if (!params.articles || !Array.isArray(params.articles)) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "articles parameter is required and must be an array"
+        );
+      }
+
+      const newsItems = params.articles as {
+        title: string;
+        link: string;
+        pubDate: string;
+      }[];
+
+      const extractedNews: any[] = [];
+
+      const extractionPromises = newsItems.map(async (newsItem) => {
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error("Extraction timeout")), 45000); // 45초 전체 타임아웃
+        });
+
+        const extractionPromise = (async () => {
+          try {
+            if (!newsItem.link) {
+              return {
+                title: newsItem.title || "제목 없음",
+                link: newsItem.link || "링크 없음",
+                content: "추출 오류: 기사 링크가 없습니다.",
+                publishDate: newsItem.pubDate,
+                extractionSuccess: false,
+              };
+            }
+            console.log(`Extracting content from: ${newsItem.link}`);
+            const extractedArticle = await this.unifiedExtractor.extract(
+              newsItem.link
+            );
+
+            if (extractedArticle && extractedArticle.content) {
+              return {
+                title: extractedArticle.title || newsItem.title,
+                link: newsItem.link,
+                sourceUrl: extractedArticle.sourceUrl,
+                content: extractedArticle.content,
+                author: extractedArticle.author,
+                publishDate: extractedArticle.publishDate || newsItem.pubDate,
+                description: extractedArticle.description,
+                extractionSuccess: true,
+              };
+            } else {
+              return {
+                title: newsItem.title,
+                link: newsItem.link,
+                sourceUrl: newsItem.link,
+                content: "내용 추출에 실패했습니다.",
+                publishDate: newsItem.pubDate,
+                extractionSuccess: false,
+              };
+            }
+          } catch (error) {
+            console.log(
+              `Error extracting content from ${newsItem.link}:`,
+              error
+            );
+            return {
+              title: newsItem.title,
+              link: newsItem.link,
+              sourceUrl: newsItem.link,
+              content: `추출 오류: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              publishDate: newsItem.pubDate,
+              extractionSuccess: false,
+            };
+          }
+        })();
+
+        return Promise.race([extractionPromise, timeoutPromise]);
+      });
+
+      const results = await Promise.allSettled(extractionPromises);
+
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          extractedNews.push(result.value);
+        } else {
+          const newsItem = newsItems[index];
+          extractedNews.push({
+            title: newsItem.title,
+            link: newsItem.link,
+            sourceUrl: newsItem.link,
+            content: `추출 실패: ${result.reason?.message || "Unknown error"}`,
+            publishDate: newsItem.pubDate,
+            extractionSuccess: false,
+          });
+        }
+      });
+
+      const toolContents: ToolContent[] = [
+        {
+          type: "text",
+          text: JSON.stringify(extractedNews, null, 2),
+        },
+      ];
+
+      return {
+        content: toolContents,
+        isError: false,
+      };
     }
 
     throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
