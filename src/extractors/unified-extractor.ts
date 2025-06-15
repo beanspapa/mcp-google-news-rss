@@ -12,6 +12,7 @@ import {
   ExtractedNaverArticle,
   ExtractedGeneralArticle,
 } from "./types.js";
+import { logInfo, logWarning } from "../logger.js";
 
 export class UnifiedNewsExtractor {
   private googleExtractor: GoogleNewsRedirectExtractor;
@@ -38,11 +39,11 @@ export class UnifiedNewsExtractor {
     options?: any
   ): Promise<UnifiedExtractedArticle | null> {
     const startTime = Date.now();
-    console.log(`🚀 통합 추출기 시작: ${url}`);
+    logInfo(`🚀 통합 추출기 시작: ${url}`);
 
     try {
       const { extractor, name } = this.getExtractorForUrl(url);
-      console.log(`📌 선택된 추출기: ${name}`);
+      logInfo(`📌 선택된 추출기: ${name}`);
 
       let article:
         | ExtractedArticleBase
@@ -56,31 +57,31 @@ export class UnifiedNewsExtractor {
         article = await extractor.extract(url, options);
       } catch (error: unknown) {
         const err = error instanceof Error ? error : new Error(String(error));
-        console.warn(
+        logWarning(
           `⚠️ ${name} 추출기 오류: ${err.message}. 범용 추출기로 대체합니다.`
         );
         fallbackReason = `${name} 추출 실패: ${err.message}`;
         if (extractor !== this.generalExtractor) {
-          console.log("🔄 범용 추출기로 재시도...");
+          logInfo("🔄 범용 추출기로 재시도...");
           article = await this.generalExtractor.extract(url, options);
         }
       }
 
       if (!article || !article.content) {
         if (extractor !== this.generalExtractor && !fallbackReason) {
-          console.warn(
+          logWarning(
             `⚠️ ${name} 추출기가 콘텐츠를 반환하지 못했습니다. 범용 추출기로 대체합니다.`
           );
           fallbackReason = `${name} 추출기 콘텐츠 없음`;
           article = await this.generalExtractor.extract(url, options);
         } else if (!article || !article.content) {
-          console.log(`🚫 모든 추출기가 콘텐츠를 추출하지 못했습니다: ${url}`);
+          logInfo(`🚫 모든 추출기가 콘텐츠를 추출하지 못했습니다: ${url}`);
           return null;
         }
       }
 
       const totalExtractionTime = Date.now() - startTime;
-      console.log(`⏱️ 총 추출 시간: ${totalExtractionTime}ms`);
+      logInfo(`⏱️ 총 추출 시간: ${totalExtractionTime}ms`);
 
       const unifiedArticle: UnifiedExtractedArticle = {
         ...(article as ExtractedArticleBase),
@@ -101,7 +102,7 @@ export class UnifiedNewsExtractor {
       return unifiedArticle;
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
-      console.log(`💥 통합 추출기 심각한 오류: ${err.message}`);
+      logInfo(`💥 통합 추출기 심각한 오류: ${err.message}`);
       return null;
     }
   }
@@ -114,13 +115,13 @@ export class UnifiedNewsExtractor {
     const allResults: (UnifiedExtractedArticle | null)[] = [];
     const allErrors: { url: string; error: string }[] = [];
 
-    console.log(
+    logInfo(
       `🚀 통합 추출기 배치 작업 시작: ${urls.length}개 URL, 동시성: ${BATCH_SIZE}`
     );
 
     for (let i = 0; i < urls.length; i += BATCH_SIZE) {
       const chunk = urls.slice(i, i + BATCH_SIZE);
-      console.log(
+      logInfo(
         `- 처리 중인 배치: ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(
           urls.length / BATCH_SIZE
         )}, 크기: ${chunk.length}`
@@ -168,7 +169,7 @@ export class UnifiedNewsExtractor {
       });
     }
 
-    console.log(
+    logInfo(
       `🏁 통합 추출기 배치 작업 완료: 성공 ${allResults.length}, 실패 ${allErrors.length}`
     );
     return { results: allResults, errors: allErrors };
@@ -225,7 +226,7 @@ export class UnifiedNewsExtractor {
   }
 
   public async closeAll(): Promise<void> {
-    console.log("🚪 모든 추출기 리소스 정리 중...");
+    logInfo("🚪 모든 추출기 리소스 정리 중...");
     const closePromises: Promise<void>[] = [];
 
     if (this.googleExtractor.close) {
@@ -237,10 +238,10 @@ export class UnifiedNewsExtractor {
 
     try {
       await Promise.all(closePromises);
-      console.log("✅ 모든 추출기 리소스 정리 완료");
+      logInfo("✅ 모든 추출기 리소스 정리 완료");
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
-      console.log(`💥 추출기 리소스 정리 중 오류: ${err.message}`);
+      logInfo(`💥 추출기 리소스 정리 중 오류: ${err.message}`);
     }
   }
 }

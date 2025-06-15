@@ -39,8 +39,8 @@
     "cheerio": "^1.0.0",
     "html-to-text": "^9.0.5",
     "jsdom": "^26.1.0",
-    "mcps-logger": "^1.0.0",
-    "playwright-chromium": "^1.52.0",
+    "playwright": "^1.53.0",
+    "playwright-ghost": "^0.13.0",
     "turndown": "^7.2.0",
     "xml2js": "^0.6.2",
     "zod": "^3.25.32"

@@ -1,4 +1,3 @@
-import { chromium, Browser, Page, Route } from "playwright-chromium";
 import type { HtmlToTextOptions } from "html-to-text";
 import * as cheerio from "cheerio";
 import axios, { AxiosResponse } from "axios";
@@ -9,6 +8,8 @@ import {
   FetchOptions,
   SSRResult,
 } from "./types.js";
+import { logInfo, logWarning, logError } from "../logger.js";
+import { chromium, Browser, Page, Route } from "playwright-ghost";
 
 export class GeneralNewsExtractor {
   private browser: Browser | null;
@@ -38,7 +39,7 @@ export class GeneralNewsExtractor {
 
   private async initBrowser(): Promise<Browser> {
     if (!this.browser) {
-      console.log("🚀 Playwright 브라우저 초기화 중...");
+      logInfo("🚀 Playwright 브라우저 초기화 중...");
       this.browser = await chromium.launch({
         headless: true,
         args: [
@@ -62,10 +63,10 @@ export class GeneralNewsExtractor {
     let extractionMethod: string = "Unknown";
 
     try {
-      console.log("🌐 범용 뉴스 추출기 시작");
+      logInfo("🌐 범용 뉴스 추출기 시작");
 
       if (options.forcePlaywright) {
-        console.log("🚀 Playwright 강제 사용 모드");
+        logInfo("🚀 Playwright 강제 사용 모드");
         html = await this.fetchWithPlaywright(url);
         extractionMethod = "Playwright (Forced)";
       } else {
@@ -78,7 +79,7 @@ export class GeneralNewsExtractor {
         }
 
         if (this.isSPA(html)) {
-          console.log("🔍 SPA 감지됨, Playwright로 전환...");
+          logInfo("🔍 SPA 감지됨, Playwright로 전환...");
           html = await this.fetchWithPlaywright(url);
           extractionMethod = "Playwright (SPA Support)";
         }
@@ -104,14 +105,14 @@ export class GeneralNewsExtractor {
 
   private async fetchWithAxios(url: string): Promise<string> {
     try {
-      console.log("🔍 1차 전략: SSR/SEO 버전 시도 중...");
+      logInfo("🔍 1차 전략: SSR/SEO 버전 시도 중...");
       const ssrResult: SSRResult = await this.trySSRVersions(url);
       if (ssrResult.success && ssrResult.data) {
-        console.log(`✅ SSR 성공: ${ssrResult.method}`);
+        logInfo(`✅ SSR 성공: ${ssrResult.method}`);
         return ssrResult.data;
       }
 
-      console.log("⚠️ SSR 실패, 일반 요청으로 대체");
+      logInfo("⚠️ SSR 실패, 일반 요청으로 대체");
       const response: AxiosResponse<string> = await axios.get(url, {
         timeout: 10000,
         headers: {
@@ -156,7 +157,7 @@ export class GeneralNewsExtractor {
 
     for (const strategy of strategies) {
       try {
-        console.log(`  시도: ${strategy.name}`);
+        logInfo(`  시도: ${strategy.name}`);
         const response: AxiosResponse<string> = await axios.get(url, {
           timeout: 8000,
           headers: strategy.headers,
@@ -168,9 +169,9 @@ export class GeneralNewsExtractor {
             data: response.data,
           };
         }
-        console.log(`  ❌ ${strategy.name}: SSR 콘텐츠 감지 실패`);
+        logInfo(`  ❌ ${strategy.name}: SSR 콘텐츠 감지 실패`);
       } catch (error: any) {
-        console.log(`  ❌ ${strategy.name} 요청 실패: ${error.message}`);
+        logInfo(`  ❌ ${strategy.name} 요청 실패: ${error.message}`);
       }
     }
     return { success: false };
@@ -211,7 +212,7 @@ export class GeneralNewsExtractor {
       !html.includes("Attention Required!") &&
       !html.includes("Verifying you are human");
 
-    console.log(
+    logInfo(
       `    콘텐츠 확인: content=${hasContent}, notLoading=${notLoadingState}, textLength=${textLength}, notSecurity=${notSecurityPage}`
     );
     return hasContent && notLoadingState && hasEnoughText && notSecurityPage;
@@ -266,13 +267,13 @@ export class GeneralNewsExtractor {
     for (const selector of selectors) {
       try {
         await page.waitForSelector(selector, { timeout: 3000 });
-        console.log(`✅ 콘텐츠 감지됨: ${selector}`);
+        logInfo(`✅ 콘텐츠 감지됨: ${selector}`);
         return;
       } catch (e) {
         // 다음 선택자 시도
       }
     }
-    console.log("⏳ 모든 선택자 감지 실패, 기본 대기 시간 적용 (3초)");
+    logInfo("⏳ 모든 선택자 감지 실패, 기본 대기 시간 적용 (3초)");
     await page.waitForTimeout(3000);
   }
 
@@ -303,7 +304,7 @@ export class GeneralNewsExtractor {
       }
     });
     if (foundScriptKeyword) {
-      console.log("    SPA 단서: 스크립트 키워드 발견");
+      logInfo("    SPA 단서: 스크립트 키워드 발견");
       return true;
     }
 
@@ -315,17 +316,17 @@ export class GeneralNewsExtractor {
         (element.html()?.trim().length || 0) < 200 &&
         $("body").text().trim().length < 500
       ) {
-        console.log(`    SPA 단서: 마운트 포인트(${mountPoint}) 내용 부족`);
+        logInfo(`    SPA 단서: 마운트 포인트(${mountPoint}) 내용 부족`);
         return true;
       }
     }
 
     if (!this.isSSRContent(html) && $("body").text().trim().length < 300) {
-      console.log("    SPA 단서: SSR 실패 및 텍스트 부족");
+      logInfo("    SPA 단서: SSR 실패 및 텍스트 부족");
       return true;
     }
 
-    console.log("    SPA 아님 또는 판단 불가");
+    logInfo("    SPA 아님 또는 판단 불가");
     return false;
   }
 
@@ -335,12 +336,12 @@ export class GeneralNewsExtractor {
     extractionMethod: string
   ): Promise<Omit<ExtractedArticle, "performance">> {
     const $ = cheerio.load(html);
-    console.log(
+    logInfo(
       `🔵 범용 DOM 분석: 총 ${$("*").length}개 요소, 방식: ${extractionMethod}`
     );
 
     if (this.isCloudflareChallenge($, html)) {
-      console.warn("☁️ Cloudflare 감지됨, 콘텐츠 추출이 제한될 수 있음");
+      logWarning("☁️ Cloudflare 감지됨, 콘텐츠 추출이 제한될 수 있음");
       // Fallback or error handling for Cloudflare
     }
 
@@ -357,7 +358,7 @@ export class GeneralNewsExtractor {
       ? new URL(sourceUrl).hostname.replace("www.", "")
       : "";
 
-    console.log(`📄 범용 추출 완료: ${content.length}자`);
+    logInfo(`📄 범용 추출 완료: ${content.length}자`);
 
     const stats = this.calculateStats(content);
 
@@ -394,7 +395,7 @@ export class GeneralNewsExtractor {
   }
 
   extractGeneralContent($: cheerio.CheerioAPI): string {
-    console.log("🌐 범용 본문 추출 시작...");
+    logInfo("🌐 범용 본문 추출 시작...");
 
     const generalSelectors = [
       { selector: "#harmonyContainer", priority: 9, site: "daum" },
@@ -428,7 +429,7 @@ export class GeneralNewsExtractor {
       const element = $(config.selector).first();
       if (element.length && config.priority > 0) {
         const textLength = element.text().trim().length;
-        console.log(
+        logInfo(
           `   ${config.selector}: ${textLength}자 (우선순위: ${config.priority})`
         );
 
@@ -453,12 +454,12 @@ export class GeneralNewsExtractor {
 
     let contentArea: any;
     if (bestMatch) {
-      console.log(
+      logInfo(
         `✅ 선택된 영역: ${bestMatch.selector} (우선순위: ${bestMatch.priority}, ${bestMatch.textLength}자, ${bestMatch.site})`
       );
       contentArea = bestMatch.element;
     } else {
-      console.log("⚠️ 우선순위 매칭 실패, 전체 페이지에서 추출");
+      logInfo("⚠️ 우선순위 매칭 실패, 전체 페이지에서 추출");
       contentArea = $("body");
     }
 
@@ -483,7 +484,7 @@ export class GeneralNewsExtractor {
       });
 
     if (paragraphs.length < 3) {
-      console.log("📝 p 태그가 적음, div에서 추가 추출");
+      logInfo("📝 p 태그가 적음, div에서 추가 추출");
       contentArea.find("div").each((i: number, element: any) => {
         const text = $(element).text().trim();
         if (
@@ -508,7 +509,7 @@ export class GeneralNewsExtractor {
     }
 
     const result = uniqueParagraphs.join("\n\n");
-    console.log(
+    logInfo(
       `📄 범용 추출 정리: ${result.length}자, ${uniqueParagraphs.length}문단`
     );
 
@@ -554,14 +555,14 @@ export class GeneralNewsExtractor {
           }
         }
       } catch (error) {
-        console.warn(`Failed to remove elements with selector: ${selector}`);
+        logWarning(`Failed to remove elements with selector: ${selector}`);
       }
     });
   }
 
   extractTitle($: cheerio.CheerioAPI): string {
     if (this.isGoogleNewsPage($)) {
-      console.log("🔍 구글 뉴스 페이지에서 제목 추출...");
+      logInfo("🔍 구글 뉴스 페이지에서 제목 추출...");
       return this.extractGoogleNewsTitle($);
     }
 
@@ -617,7 +618,7 @@ export class GeneralNewsExtractor {
       if (element.length) {
         const title = element.text().trim();
         if (title && title.length > 5 && !this.isMediaCompanyName(title)) {
-          console.log(`  구글 뉴스 제목 발견: ${selector} → "${title}"`);
+          logInfo(`  구글 뉴스 제목 발견: ${selector} → "${title}"`);
           return title;
         }
       }
@@ -633,12 +634,12 @@ export class GeneralNewsExtractor {
         !text.includes("구글") &&
         !text.includes("Google")
       ) {
-        console.log(`  패턴 매칭으로 제목 발견: "${text}"`);
+        logInfo(`  패턴 매칭으로 제목 발견: "${text}"`);
         return text;
       }
     }
 
-    console.log("  구글 뉴스에서 적절한 제목을 찾을 수 없음");
+    logInfo("  구글 뉴스에서 적절한 제목을 찾을 수 없음");
     return "구글 뉴스 - 제목 추출 실패";
   }
 
@@ -787,7 +788,7 @@ export class GeneralNewsExtractor {
     if (this.browser) {
       await this.browser.close();
       this.browser = null;
-      console.log("🔚 브라우저 연결 종료");
+      logInfo("🔚 브라우저 연결 종료");
     }
   }
 }

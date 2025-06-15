@@ -1,6 +1,7 @@
 import { parseStringPromise } from "xml2js";
 import { Input, Output } from "../types/index.js";
 import axios from "axios";
+import { logInfo, logError, logWarning } from "../logger.js";
 
 export class NewsRssService {
   private readonly googleRssBaseUrl = "https://news.google.com/rss";
@@ -141,19 +142,19 @@ export class NewsRssService {
 
     // Input validation
     if (!this.validLanguages.has(hl)) {
-      console.error(`Invalid language code: ${hl}`); // Removed the extra console.error
+      logError(`Invalid language code: ${hl}`);
       return {
         error: "Invalid language code",
       };
     }
     if (!this.validCountries.has(gl)) {
-      console.error(`Invalid country code: ${gl}`); // Removed the extra console.error
+      logError(`Invalid country code: ${gl}`);
       return {
         error: "Invalid contry code",
       };
     }
     if (count && count < 0) {
-      console.error(`Invalid count: ${count}`); // Removed the extra console.error
+      logError(`Invalid count: ${count}`);
       return {
         error: "Invalid count number",
       };
@@ -164,9 +165,8 @@ export class NewsRssService {
       return await this.fetchRss({ gl, hl, keyword, count });
     } catch (error: any) {
       // Explicitly type error as any or unknown
-      console.error(
-        `Error fetching news RSS for gl=${gl}, hl=${hl}, keyword=${keyword}:`,
-        error
+      logError(
+        `Error fetching news RSS for gl=${gl}, hl=${hl}, keyword=${keyword}: ${error}`
       );
       // Return the object directly instead of pushing to an array for error handling
       return {
@@ -201,7 +201,7 @@ export class NewsRssService {
       )}&hl=${hl}&gl=${gl}&ceid=${gl}:${hl}`;
     }
 
-    // console.log(`Fetching RSS from: ${url}`); // MCP JSON-RPC 호환성을 위해 주석 처리
+    // logInfo(`Fetching RSS from: ${url}`); // MCP JSON-RPC 호환성을 위해 주석 처리
 
     const xml = await axios.get(url).then((res) => res.data);
 
@@ -218,7 +218,7 @@ export class NewsRssService {
 
     // If channel.item is missing or empty, return an empty array
     if (!data.rss.channel.item) {
-      // console.log("No items found in RSS feed."); // MCP JSON-RPC 호환성을 위해 주석 처리
+      // logInfo("No items found in RSS feed."); // MCP JSON-RPC 호환성을 위해 주석 처리
       return [];
     }
 
@@ -238,9 +238,10 @@ export class NewsRssService {
           typeof item.title !== "string" ||
           typeof item.link !== "string"
         ) {
-          console.warn(
-            "Skipping item due to unexpected structure or missing title/link:",
-            item
+          logWarning(
+            `Skipping item due to unexpected structure or missing title/link: ${JSON.stringify(
+              item
+            )}`
           );
           return null;
         }

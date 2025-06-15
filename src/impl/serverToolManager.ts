@@ -8,6 +8,7 @@ import {
   ExtractedNewsOutputSchema,
 } from "../types/index.js";
 import { UnifiedNewsExtractor } from "../extractors/unified-extractor.js";
+import { logInfo, logError } from "../logger.js";
 
 export class ServerToolManager implements MCPToolManager {
   private newsRssService: NewsRssService;
@@ -188,10 +189,10 @@ Output:
     try {
       if (this.unifiedExtractor) {
         await this.unifiedExtractor.closeAll();
-        console.log("서버 종료 시 추출기 리소스 정리 완료");
+        logInfo("서버 종료 시 추출기 리소스 정리 완료");
       }
     } catch (error) {
-      console.log("서버 종료 시 추출기 리소스 정리 중 오류:", error);
+      logError(`서버 종료 시 추출기 리소스 정리 중 오류: ${error}`);
     }
   }
 
@@ -209,7 +210,7 @@ Output:
     content: ToolContent[];
     isError?: boolean;
   }> {
-    console.log("Executing tool:", name, params);
+    logInfo(`Executing tool: ${name}, params: ${JSON.stringify(params)}`);
 
     if (name === "getGoogleNewsItems") {
       // params 유효성 검사
@@ -304,7 +305,7 @@ Output:
 
           const extractionPromise = (async () => {
             try {
-              console.log(`Extracting content from: ${newsItem.link}`);
+              logInfo(`Extracting content from: ${newsItem.link}`);
               const extractedArticle = await this.unifiedExtractor.extract(
                 newsItem.link
               );
@@ -331,9 +332,8 @@ Output:
                 };
               }
             } catch (error) {
-              console.log(
-                `Error extracting content from ${newsItem.link}:`,
-                error
+              logError(
+                `Error extracting content from ${newsItem.link}: ${error}`
               );
               return {
                 title: newsItem.title,
@@ -385,7 +385,7 @@ Output:
           isError: false,
         };
       } catch (error) {
-        console.error("Error in searchAndExtractNews:", error);
+        logError(`Error in searchAndExtractNews: ${error}`);
         const toolContents: ToolContent[] = [
           {
             type: "text",
@@ -434,7 +434,7 @@ Output:
                 extractionSuccess: false,
               };
             }
-            console.log(`Extracting content from: ${newsItem.link}`);
+            logInfo(`Extracting content from: ${newsItem.link}`);
             const extractedArticle = await this.unifiedExtractor.extract(
               newsItem.link
             );
@@ -461,9 +461,8 @@ Output:
               };
             }
           } catch (error) {
-            console.log(
-              `Error extracting content from ${newsItem.link}:`,
-              error
+            logError(
+              `Error extracting content from ${newsItem.link}: ${error}`
             );
             return {
               title: newsItem.title,

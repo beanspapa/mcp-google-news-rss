@@ -1,12 +1,4 @@
 import {
-  chromium,
-  Browser,
-  BrowserContext,
-  Page,
-  Route,
-  LaunchOptions,
-} from "playwright-chromium";
-import {
   ExtractedGoogleArticle,
   GoogleArticleStats,
   GoogleArticleMetadata,
@@ -18,6 +10,17 @@ import {
   SimulatedPlugin,
   SimulatedPluginMimeType,
 } from "./types.js"; // Centralized types
+import { logInfo, logWarning, logError } from "../logger.js";
+
+import {
+  chromium,
+  Browser,
+  BrowserContext,
+  Page,
+  Route,
+  LaunchOptions,
+} from "playwright-ghost";
+import plugins from "playwright-ghost";
 
 /**
  * 향상된 구글 뉴스 콘텐츠 추출기
@@ -79,13 +82,13 @@ export class GoogleNewsRedirectExtractor {
               codeBlockStyle: "fenced",
             }))
         )
-        .catch((err) => console.error("Failed to load turndown", err));
+        .catch((err) => logError(`Failed to load turndown: ${err}`));
       import("jsdom")
         .then((module) => (this.JSDOM = module.JSDOM))
-        .catch((err) => console.error("Failed to load jsdom", err));
+        .catch((err) => logError(`Failed to load jsdom: ${err}`));
       import("@mozilla/readability")
         .then((module) => (this.Readability = module.Readability))
-        .catch((err) => console.error("Failed to load readability", err));
+        .catch((err) => logError(`Failed to load readability: ${err}`));
     } else {
       // In browser environment, these might be globally available or handled differently
       // For now, this example focuses on Node.js server-side usage
@@ -101,7 +104,7 @@ export class GoogleNewsRedirectExtractor {
   private async _initBrowser(): Promise<BrowserContext> {
     if (!this.browser || !this.browser.isConnected()) {
       if (this.browser) await this.browser.close();
-      this._logVerbose("🚀 Playwright 브라우저 초기화...");
+      logWarning("🚀 Playwright 브라우저 초기화...");
 
       const viewport = this._getRandomViewport();
       const launchOptions: LaunchOptions = {
@@ -132,12 +135,15 @@ export class GoogleNewsRedirectExtractor {
 
       if (this.options.proxy && this.options.proxy.server) {
         launchOptions.proxy = this.options.proxy;
-        this._logVerbose(`🌐 프록시 사용: ${this.options.proxy.server}`);
+        logWarning(`🌐 프록시 사용: ${this.options.proxy.server}`);
       }
 
-      this.browser = await chromium.launch(launchOptions);
+      this.browser = await chromium.launch({
+        ...launchOptions,
+        headless: true,
+      });
       this.browser.on("disconnected", () => {
-        this._logVerbose("👻 Playwright 브라우저 연결 끊김, 리소스 정리");
+        logWarning("👻 Playwright 브라우저 연결 끊김, 리소스 정리");
         this.browser = null;
         this.context = null;
       });
@@ -318,7 +324,7 @@ export class GoogleNewsRedirectExtractor {
       });
       const finalUrl = page.url();
       if (finalUrl !== startUrl) {
-        this._logVerbose(`🔄 리다이렉션 감지: ${startUrl} → ${finalUrl}`);
+        logWarning(`🔄 리다이렉션 감지: ${startUrl} → ${finalUrl}`);
       }
       await page.waitForFunction(() => document.readyState === "complete", {
         timeout: 10000,
@@ -328,11 +334,9 @@ export class GoogleNewsRedirectExtractor {
     } catch (error) {
       if (verbose) {
         if (error instanceof Error) {
-          this._logVerbose(`⚠️ 리다이렉션 대기 중 오류: ${error.message}`);
+          logWarning(`⚠️ 리다이렉션 대기 중 오류: ${error.message}`);
         } else {
-          this._logVerbose(
-            `⚠️ 리다이렉션 대기 중 알 수 없는 오류: ${String(error)}`
-          );
+          logWarning(`⚠️ 리다이렉션 대기 중 알 수 없는 오류: ${String(error)}`);
         }
       }
       return page.url();
@@ -360,9 +364,7 @@ export class GoogleNewsRedirectExtractor {
       const article = reader.parse(); // This is ParsedReadabilityArticle by structure
 
       if (article && article.content) {
-        this._logVerbose(
-          `✅ Readability 추출 성공: ${article.title || "No title"}`
-        );
+        logWarning(`✅ Readability 추출 성공: ${article.title || "No title"}`);
         let content = article.content;
 
         if (this.options.enableMarkdown && this.turndownService) {
@@ -385,9 +387,9 @@ export class GoogleNewsRedirectExtractor {
       }
     } catch (error) {
       if (error instanceof Error) {
-        console.warn(`⚠️ Readability 추출 실패: ${error.message}`);
+        logWarning(`⚠️ Readability 추출 실패: ${error.message}`);
       } else {
-        console.warn(`⚠️ Readability 추출 실패: ${String(error)}`);
+        logWarning(`⚠️ Readability 추출 실패: ${String(error)}`);
       }
     }
     return null;
@@ -517,7 +519,8 @@ export class GoogleNewsRedirectExtractor {
             }
           });
         } catch (e) {
-          if (verboseEvaluate) console.log(`제목 선택자 오류: ${selector}`, e);
+          if (verboseEvaluate)
+            logWarning(`제목 선택자 오류: ${selector} - ${e}`);
         }
       }
 
@@ -561,7 +564,7 @@ export class GoogleNewsRedirectExtractor {
           });
         } catch (e) {
           if (verboseEvaluate)
-            console.log(`콘텐츠 선택자 오류: ${selector}`, e);
+            logWarning(`콘텐츠 선택자 오류: ${selector} - ${e}`);
         }
       }
 
@@ -616,11 +619,11 @@ export class GoogleNewsRedirectExtractor {
       }
 
       if (verboseEvaluate) {
-        console.log(
+        logWarning(
           `📊 제목 점수: ${bestTitleScore}, 콘텐츠 점수: ${bestContentScore}`
         );
-        console.log(`📝 제목: "${bestTitle.substring(0, 50)}..."`);
-        console.log(`📄 콘텐츠 길이: ${bestContent.length}자`);
+        logWarning(`📝 제목: "${bestTitle.substring(0, 50)}..."`);
+        logWarning(`📄 콘텐츠 길이: ${bestContent.length}자`);
       }
 
       return {
@@ -637,7 +640,7 @@ export class GoogleNewsRedirectExtractor {
     this.requestTimes = this.requestTimes.filter((time) => now - time < 60000);
     if (this.requestTimes.length >= requestsPerMinute) {
       const waitTime = 60000 - (now - this.requestTimes[0]) + 1000;
-      this._logVerbose(
+      logWarning(
         `⏳ 레이트 리미트 적용, ${Math.round(waitTime / 1000)}초 대기...`
       );
       await new Promise((resolve) => setTimeout(resolve, waitTime));
@@ -650,7 +653,7 @@ export class GoogleNewsRedirectExtractor {
     options: GoogleNewsExtractorOptions = {}
   ): Promise<ExtractedGoogleArticle | null> {
     const mergedOptions = { ...this.options, ...options };
-    this._logVerbose("🔗 구글 뉴스 콘텐츠 추출 시작 (최종 버전)...");
+    logWarning("🔗 구글 뉴스 콘텐츠 추출 시작 (최종 버전)...");
 
     if (mergedOptions.rateLimit !== undefined) {
       await this._applyRateLimit(mergedOptions.rateLimit);
@@ -682,7 +685,7 @@ export class GoogleNewsRedirectExtractor {
           });
         }
 
-        this._logVerbose(`🌐 페이지 로드 시도 ${attempt}/${maxRetries}...`);
+        logWarning(`🌐 페이지 로드 시도 ${attempt}/${maxRetries}...`);
         await page.goto(googleNewsUrl, {
           waitUntil: "domcontentloaded",
           timeout: mergedOptions.timeout,
@@ -706,9 +709,7 @@ export class GoogleNewsRedirectExtractor {
           !extractedData.content ||
           extractedData.content.length < 100
         ) {
-          this._logVerbose(
-            "🔄 Readability 실패 또는 내용 부족, 스마트 추출 사용..."
-          );
+          logWarning("🔄 Readability 실패 또는 내용 부족, 스마트 추출 사용...");
           const smartData = await this._smartExtractContent(
             page,
             mergedOptions.verbose || false
@@ -730,7 +731,7 @@ export class GoogleNewsRedirectExtractor {
           extractedData.content &&
           extractedData.content.length > 100
         ) {
-          this._logVerbose(
+          logWarning(
             `✅ 콘텐츠 추출 성공 (${extractedData.content.length}자, 시도: ${attempt})`
           );
           const cleanContent = this._cleanText(extractedData.content);
@@ -780,7 +781,7 @@ export class GoogleNewsRedirectExtractor {
 
         const errorMessage =
           error instanceof Error ? error.message : String(error);
-        console.error(`❌ 시도 ${attempt} 실패: ${errorMessage}`);
+        logWarning(`❌ 시도 ${attempt} 실패: ${errorMessage}`);
 
         if (attempt === maxRetries) {
           return null;
@@ -790,7 +791,7 @@ export class GoogleNewsRedirectExtractor {
           2000 * Math.pow(2, attempt - 1) + Math.random() * 1000,
           15000
         );
-        this._logVerbose(`🔄 ${Math.round(delay / 1000)}초 후 재시도...`);
+        logWarning(`🔄 ${Math.round(delay / 1000)}초 후 재시도...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
@@ -834,7 +835,7 @@ export class GoogleNewsRedirectExtractor {
       await this.browser.close();
       this.browser = null;
     }
-    this._logVerbose("🔚 브라우저 및 컨텍스트 종료됨");
+    logWarning("🔚 브라우저 및 컨텍스트 종료됨");
   }
 
   static createRateLimitedExtractor(

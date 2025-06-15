@@ -6,6 +6,7 @@ import {
   NaverArticleMetadata,
   NaverNewsExtractorOptions,
 } from "./types.js";
+import { logInfo, logWarning } from "../logger.js";
 
 export class NaverNewsExtractor {
   private userAgents: string[];
@@ -25,7 +26,7 @@ export class NaverNewsExtractor {
     const startTime = Date.now();
 
     try {
-      console.log("🔵 네이버 뉴스 전용 추출기 시작");
+      logInfo("🔵 네이버 뉴스 전용 추출기 시작");
 
       if (!this.isNaverNewsUrl(url)) {
         throw new Error("네이버 뉴스 URL이 아닙니다.");
@@ -57,11 +58,11 @@ export class NaverNewsExtractor {
   }
 
   private async fetchHTML(url: string): Promise<string> {
-    console.log("🔍 네이버 뉴스 HTML 가져오기 시작...");
+    logInfo("🔍 네이버 뉴스 HTML 가져오기 시작...");
 
     for (const userAgent of this.userAgents) {
       try {
-        console.log(
+        logInfo(
           `  시도: ${
             userAgent.includes("Googlebot")
               ? "Googlebot"
@@ -84,11 +85,11 @@ export class NaverNewsExtractor {
         });
 
         if (this.isValidNaverNewsHTML(response.data)) {
-          console.log(`  ✅ 성공: 유효한 네이버 뉴스 페이지`);
+          logInfo(`  ✅ 성공: 유효한 네이버 뉴스 페이지`);
           return response.data;
         }
       } catch (error: any) {
-        console.log(`  ❌ 실패: ${error.message}`);
+        logWarning(`  ❌ 실패: ${error.message}`);
       }
     }
     throw new Error(
@@ -108,7 +109,7 @@ export class NaverNewsExtractor {
       html.length > 5000,
     ];
     const validScore = indicators.filter(Boolean).length;
-    console.log(`    네이버 뉴스 검증 점수: ${validScore}/5`);
+    logInfo(`    네이버 뉴스 검증 점수: ${validScore}/5`);
     return validScore >= 3;
   }
 
@@ -117,7 +118,7 @@ export class NaverNewsExtractor {
     sourceUrl: string
   ): Promise<Omit<ExtractedNaverArticle, "performance">> {
     const $ = cheerio.load(html);
-    console.log(`🔵 네이버 뉴스 DOM 분석: 총 ${$("*").length}개 요소`);
+    logInfo(`🔵 네이버 뉴스 DOM 분석: 총 ${$("*").length}개 요소`);
 
     const metadata: Partial<NaverArticleMetadata> =
       this.extractNaverMetadata($);
@@ -127,7 +128,7 @@ export class NaverNewsExtractor {
     const description = this.extractNaverDescription($);
     const content = this.extractNaverContent($);
 
-    console.log(`📄 네이버 뉴스 추출 완료: ${content.length}자`);
+    logInfo(`📄 네이버 뉴스 추출 완료: ${content.length}자`);
     const stats = this.calculateStats(content);
 
     return {
@@ -148,7 +149,7 @@ export class NaverNewsExtractor {
   }
 
   private extractNaverContent($: cheerio.CheerioAPI): string {
-    console.log("🔵 네이버 뉴스 본문 추출 시작...");
+    logInfo("🔵 네이버 뉴스 본문 추출 시작...");
     const naverSelectors: string[] = [
       "#dic_area",
       "#newsct_article",
@@ -162,7 +163,7 @@ export class NaverNewsExtractor {
       const element = $(selector).first();
       if (element.length > 0) {
         const textLength = (element.text() || "").trim().length;
-        console.log(`  확인: ${selector} - ${textLength}자`);
+        logInfo(`  확인: ${selector} - ${textLength}자`);
         if (textLength > bestContent.length) {
           bestContent = (element.text() || "").trim();
           bestSelector = selector;
@@ -171,17 +172,17 @@ export class NaverNewsExtractor {
     }
 
     if (!bestContent) {
-      console.log("⚠️ 네이버 전용 선택자로 콘텐츠를 찾을 수 없음, 전체 탐색");
+      logWarning("⚠️ 네이버 전용 선택자로 콘텐츠를 찾을 수 없음, 전체 탐색");
       bestContent = ($("body").text() || "").trim();
       bestSelector = "body (fallback)";
     }
-    console.log(`✅ 최적 선택자: ${bestSelector} (${bestContent.length}자)`);
+    logInfo(`✅ 최적 선택자: ${bestSelector} (${bestContent.length}자)`);
     const cleanedContent = this.cleanNaverContent(bestContent);
     return cleanedContent;
   }
 
   private cleanNaverContent(content: string): string {
-    console.log("🧹 네이버 콘텐츠 정제 시작...");
+    logInfo("🧹 네이버 콘텐츠 정제 시작...");
     const naverNoisePatterns: RegExp[] = [
       /언론사 구독, 기자 구독.*?더 보기/g,
       /네이버에서 제공하는.*?보기/g,
@@ -214,7 +215,7 @@ export class NaverNewsExtractor {
       }
       const after = cleaned.length;
       if (before !== after) {
-        console.log(`  패턴 ${index + 1} 제거: ${before - after}자 감소`);
+        logInfo(`  패턴 ${index + 1} 제거: ${before - after}자 감소`);
       }
     });
 
@@ -223,12 +224,12 @@ export class NaverNewsExtractor {
       return trimmed.length > 10 && !trimmed.match(/^[0-9\s\-:]+$/);
     });
     const result = sentences.join(". ").trim();
-    console.log(`🧹 네이버 콘텐츠 정제 완료: ${result.length}자`);
+    logInfo(`🧹 네이버 콘텐츠 정제 완료: ${result.length}자`);
     return result;
   }
 
   private extractNaverTitle($: cheerio.CheerioAPI): string {
-    console.log("🔵 네이버 뉴스 제목 추출 시작...");
+    logInfo("🔵 네이버 뉴스 제목 추출 시작...");
     const selectors = [
       'meta[property="og:title"]',
       'meta[name="twitter:title"]',
@@ -248,7 +249,7 @@ export class NaverNewsExtractor {
         if (title) {
           title = title.trim();
           if (title.length > 5) {
-            console.log(`  ✅ 제목 발견 (${selector}): ${title}`);
+            logInfo(`  ✅ 제목 발견 (${selector}): ${title}`);
             return title
               .replace(/\n/g, " ")
               .replace(/\s{2,}/g, " ")
@@ -257,12 +258,12 @@ export class NaverNewsExtractor {
         }
       }
     }
-    console.log("⚠️ 제목을 찾을 수 없음");
+    logWarning("⚠️ 제목을 찾을 수 없음");
     return "제목을 찾을 수 없습니다";
   }
 
   private extractNaverAuthor($: cheerio.CheerioAPI): string {
-    console.log("🔵 네이버 뉴스 작성자 추출 시작...");
+    logInfo("🔵 네이버 뉴스 작성자 추출 시작...");
     // 1. JSON-LD (application/ld+json) 스크립트에서 작성자 정보 추출 (가장 정확)
     try {
       const ldJsonScript = $('script[type="application/ld+json"]');
@@ -280,7 +281,7 @@ export class NaverNewsExtractor {
                 !authorName.includes("네이버") &&
                 !authorName.includes("naver")
               ) {
-                console.log(`  ✅ 작성자 발견 (JSON-LD): ${authorName}`);
+                logInfo(`  ✅ 작성자 발견 (JSON-LD): ${authorName}`);
                 return authorName;
               }
             }
@@ -296,9 +297,7 @@ export class NaverNewsExtractor {
                     !authorName.includes("네이버") &&
                     !authorName.includes("naver")
                   ) {
-                    console.log(
-                      `  ✅ 작성자 발견 (JSON-LD Array): ${authorName}`
-                    );
+                    logInfo(`  ✅ 작성자 발견 (JSON-LD Array): ${authorName}`);
                     return authorName;
                   }
                 }
@@ -308,7 +307,7 @@ export class NaverNewsExtractor {
         }
       }
     } catch (e: any) {
-      console.log(`  ⚠️ JSON-LD 파싱 중 오류: ${e.message}`);
+      logWarning(`  ⚠️ JSON-LD 파싱 중 오류: ${e.message}`);
     }
 
     // 2. 메타 태그에서 작성자 정보 추출
@@ -327,7 +326,7 @@ export class NaverNewsExtractor {
         !author.includes("네이버") &&
         !author.includes("naver")
       ) {
-        console.log(`  ✅ 작성자 발견 (메타태그 ${selector}): ${author}`);
+        logInfo(`  ✅ 작성자 발견 (메타태그 ${selector}): ${author}`);
         return author;
       }
     }
@@ -368,18 +367,18 @@ export class NaverNewsExtractor {
             authorText.length < 20 &&
             !authorText.includes("네이버")
           ) {
-            console.log(`  ✅ 작성자 발견 (${selector}): ${authorText}`);
+            logInfo(`  ✅ 작성자 발견 (${selector}): ${authorText}`);
             return authorText;
           }
         }
       }
     }
-    console.log("⚠️ 작성자를 찾을 수 없음");
+    logWarning("⚠️ 작성자를 찾을 수 없음");
     return "";
   }
 
   private extractNaverPublishDate($: cheerio.CheerioAPI): string | null {
-    console.log("🔵 네이버 뉴스 발행일 추출 시작...");
+    logInfo("🔵 네이버 뉴스 발행일 추출 시작...");
     // 1. JSON-LD (가장 정확)
     try {
       const ldJsonScript = $('script[type="application/ld+json"]');
@@ -392,7 +391,7 @@ export class NaverNewsExtractor {
             if (datePublished) {
               const parsedDate = this.parseNaverDate(datePublished);
               if (parsedDate) {
-                console.log(`  ✅ 발행일 발견 (JSON-LD): ${parsedDate}`);
+                logInfo(`  ✅ 발행일 발견 (JSON-LD): ${parsedDate}`);
                 return parsedDate;
               }
             }
@@ -400,7 +399,7 @@ export class NaverNewsExtractor {
         }
       }
     } catch (e: any) {
-      console.log(`  ⚠️ JSON-LD 날짜 파싱 중 오류: ${e.message}`);
+      logWarning(`  ⚠️ JSON-LD 날짜 파싱 중 오류: ${e.message}`);
     }
 
     // 2. 메타 태그
@@ -415,7 +414,7 @@ export class NaverNewsExtractor {
       if (dateStr) {
         const parsedDate = this.parseNaverDate(dateStr);
         if (parsedDate) {
-          console.log(`  ✅ 발행일 발견 (메타태그 ${selector}): ${parsedDate}`);
+          logInfo(`  ✅ 발행일 발견 (메타태그 ${selector}): ${parsedDate}`);
           return parsedDate;
         }
       }
@@ -444,20 +443,20 @@ export class NaverNewsExtractor {
         if (dateStr) {
           const parsedDate = this.parseNaverDate(dateStr.trim());
           if (parsedDate) {
-            console.log(`  ✅ 발행일 발견 (${selector}): ${parsedDate}`);
+            logInfo(`  ✅ 발행일 발견 (${selector}): ${parsedDate}`);
             return parsedDate;
           }
         }
       }
     }
-    console.log("⚠️ 발행일을 찾을 수 없음");
+    logWarning("⚠️ 발행일을 찾을 수 없음");
     return null;
   }
 
   // 네이버 날짜 문자열 파싱 (다양한 포맷 처리)
   private parseNaverDate(dateStr: string): string | null {
     if (!dateStr || typeof dateStr !== "string") return null;
-    console.log(`  파싱 시도: "${dateStr}"`);
+    logInfo(`  파싱 시도: "${dateStr}"`);
     let cleanedDateStr = dateStr.trim();
 
     // "YYYY.MM.DD. 오전/오후 H:mm" 또는 "YYYY.MM.DD HH:mm"
@@ -531,7 +530,7 @@ export class NaverNewsExtractor {
       }
     }
 
-    console.log(`  ⚠️ 지원하지 않는 날짜 포맷: "${dateStr}"`);
+    logWarning(`  ⚠️ 지원하지 않는 날짜 포맷: "${dateStr}"`);
     return null;
   }
 
@@ -544,7 +543,7 @@ export class NaverNewsExtractor {
     for (const selector of selectors) {
       const description = $(selector).attr("content")?.trim();
       if (description && description.length > 10) {
-        console.log(
+        logInfo(
           `  ✅ 설명 발견 (${selector}): ${description.substring(0, 50)}...`
         );
         return description;
