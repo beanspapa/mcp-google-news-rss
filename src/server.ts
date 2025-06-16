@@ -62,8 +62,64 @@ export class NewsRssMCPServer {
       } catch (error) {
         logError("서버 종료 중 오류: " + error);
       }
-      process.exit(0);
+      await flushAndExit(0);
     });
+
+    // === [안정성 및 예외 처리 코드 추가] ===
+    // uncaughtException, unhandledRejection 핸들링
+    process.on("uncaughtException", (err: any) => {
+      logError(
+        "uncaughtException 발생: " +
+          (err && err.stack ? err.stack : String(err))
+      );
+      // 치명적 오류가 아니면 프로세스 유지, 필요시 graceful shutdown
+    });
+    process.on("unhandledRejection", (reason: any) => {
+      logError(
+        "unhandledRejection 발생: " +
+          (reason && reason.stack ? reason.stack : String(reason))
+      );
+    });
+
+    // EPIPE 등 파이프 오류 핸들링
+    process.stdout.on("error", (err: any) => {
+      if (err.code === "EPIPE") {
+        logError(
+          "stdout EPIPE 오류 발생: " +
+            (err && err.stack ? err.stack : String(err))
+        );
+        process.exit(0);
+      } else {
+        logError(
+          "stdout 오류 발생: " + (err && err.stack ? err.stack : String(err))
+        );
+      }
+    });
+    process.stderr.on("error", (err: any) => {
+      if (err.code === "EPIPE") {
+        logError(
+          "stderr EPIPE 오류 발생: " +
+            (err && err.stack ? err.stack : String(err))
+        );
+        process.exit(0);
+      } else {
+        logError(
+          "stderr 오류 발생: " + (err && err.stack ? err.stack : String(err))
+        );
+      }
+    });
+
+    // process.exit() 전 stdout/stderr flush 보장
+    async function flushAndExit(code: number) {
+      function flush(stream: NodeJS.WriteStream) {
+        return new Promise<void>((resolve) => {
+          if (stream.writableLength === 0) return resolve();
+          stream.write("", () => resolve());
+        });
+      }
+      await Promise.all([flush(process.stdout), flush(process.stderr)]);
+      process.exit(code);
+    }
   }
 
   private setupServerHandlers(): void {
